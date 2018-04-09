@@ -1,0 +1,51 @@
+﻿@{
+    ViewData["Title"] = "Home Page";
+}
+
+<div class="panel panel-default">
+    <div class="panel-heading jumbotron">
+        <div>
+            @if (User.Identity.IsAuthenticated)
+            {
+                <h1>Welcome @User.Identity.Name</h1>
+                <p class="lead">Here are your claims</p>
+                <ul>
+                    @foreach (var claim in User.Claims)
+                    {
+                        <li>
+                            <em>@claim.Type</em>: @claim.Value
+                        </li>
+                    }
+                </ul>
+            }
+            else
+            {
+                <h1>Welcome!</h1>
+            }
+
+        </div>
+
+    </div>
+    <div class="panel-body bg-info">
+        <div class="col-lg-12">
+            <h2>References</h2>
+            <ul>
+                <li><a href="https://github.com/Azure-Samples/active-directory-b2c-dotnetcore-webapp">An ASP.NET Core web app with Azure AD B2C</a></li>
+                <li><a href="https://github.com/Azure-Samples/active-directory-b2c-dotnetcore-webapi">An ASP.NET Core 2.0 web API with Azure AD B2C</a></li>
+                <li><a href="https://azure.microsoft.com/en-us/resources/samples/active-directory-b2c-dotnetcore-webapi/">An ASP.NET Core 2.0 web API with Azure AD B2C</a></li>
+                <li><a href="https://github.com/Azure-Samples/active-directory-b2c-xamarin-native">Integrate Azure AD B2C into a Xamarin forms app using MSAL</a></li>
+                <li><a href="https://docs.microsoft.com/en-us/azure/active-directory-b2c/active-directory-b2c-app-registration">Azure Active Directory B2C: Register your application</a></li>
+                <li><a href="https://docs.microsoft.com/en-us/azure/active-directory-b2c/active-directory-b2c-devquickstarts-web-dotnet-susi">Create an ASP.NET web app with Azure Active Directory B2C sign-up, sign-in, profile edit, and password reset</a></li>
+                <li><a href="https://docs.microsoft.com/en-us/azure/active-directory-b2c/active-directory-b2c-get-started">Create an Azure Active Directory B2C tenant in the Azure portal</a></li>
+                <li><a href="https://docs.microsoft.com/en-us/azure/active-directory-b2c/active-directory-b2c-reference-oidc">Azure Active Directory B2C: Web sign-in with OpenID Connect</a></li>
+                <li><a href="https://docs.microsoft.com/en-us/azure/active-directory-b2c/active-directory-b2c-reference-oauth-code">Azure Active Directory B2C: OAuth 2.0 authorization code flow</a></li>
+                <li><a href="https://docs.microsoft.com/en-us/azure/active-directory-b2c/active-directory-b2c-reference-policies">Azure Active Directory B2C: Built-in policies</a></li>
+                <li><a href="https://docs.microsoft.com/en-us/azure/active-directory-b2c/active-directory-b2c-access-tokens">Azure AD B2C: Requesting access tokens</a></li>
+                <li><a href="https://docs.microsoft.com/en-us/azure/active-directory/develop/active-directory-v2-scopes">Scopes, permissions, and consent in the Azure Active Directory v2.0 endpoint</a></li>
+                <li><a href="https://blogs.msdn.microsoft.com/gianlucb/2017/10/04/access-an-azure-ad-secured-api-with-asp-net-core-2-0/">Access an Azure AD secured Api with Asp.Net Core 2.0</a></li>
+            </ul>
+        </div>
+
+    </div>
+</div>
+
