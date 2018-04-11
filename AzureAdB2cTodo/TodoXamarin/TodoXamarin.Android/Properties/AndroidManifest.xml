@@ -1,0 +1,16 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" android:versionCode="1" android:versionName="1.0" package="com.onmicrosoft.bqadb2c.todoxamarin" android:installLocation="auto">
+	<uses-sdk android:minSdkVersion="25" />
+	<uses-permission android:name="android.permission.INTERNET" />
+	<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+	<application android:label="TodoXamarin.Android" android:icon="@mipmap/ic_launcher">
+	  <activity android:name="microsoft.identity.client.BrowserTabActivity">
+	    <intent-filter>
+	      <action android:name="android.intent.action.VIEW" />
+	      <category android:name="android.intent.category.DEFAULT" />
+	      <category android:name="android.intent.category.BROWSABLE" />
+	      <data android:scheme="msala0e368f7-8773-48d9-b20a-5d7414a13907" android:host="auth" />
+	    </intent-filter>
+	  </activity>
+	</application>
+</manifest>
