@@ -1,0 +1,18 @@
+﻿@model TodoWebClient.ViewModels.TodoItemsIndexViewModel
+
+<div class="bottomMarginDefault">
+</div>
+
+<div class="container">
+    @foreach (var item in Model.Images)
+    {
+        <div class="pull-left col-md-4">
+            <div class="h5">@item.Name</div>
+            <div class="h5">Is Completed: @item.IsComplete</div>
+            <div class="bottomMarginDefault">
+                <a asp-action="EditTodoItem" asp-controller="TodoItems" asp-route-id="@item.Id">Edit name</a> |
+                <a asp-action="DeleteTodoItem" asp-controller="TodoItems" asp-route-id="@item.Id">Delete this todo item</a>
+            </div>
+        </div>
+    }
+</div> 

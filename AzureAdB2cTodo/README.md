@@ -4,7 +4,7 @@
 1. How to use "OpenId Connect" on top of OAuth 2.0 to verify the identity of an end-user based on the authentication performed by Azure AD B2C. 
 1. How to use "MSAL" to retrieve id_token and access_token, and use them to make a call to api which secured by azure ad b2c. 
 
-##Refereces: 
+### Refereces: 
 
 [Azure AD B2C demo](https://github.com/bozhiqian/Azure-AD-B2C-Demo)
 
