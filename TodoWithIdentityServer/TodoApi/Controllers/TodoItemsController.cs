@@ -44,7 +44,7 @@ namespace TodoApi.Controllers
         }
 
         [HttpGet("{id}", Name = "GetTodoItem"), Authorize("MustOwnTodoItem")]
-        public IActionResult GetTodoItem(long id)
+        public IActionResult GetTodoItems(long id)
         {
             var ownerId = User.Claims.FirstOrDefault(claim => claim.Type == "sub")?.Value; // this is how we know who the current user is.
 
@@ -65,8 +65,9 @@ namespace TodoApi.Controllers
             return Ok(todoItemViewModel);
         }
 
-        [HttpPost(), Authorize(Roles = "PayingUser")]
-        public IActionResult CreateTodoItem([FromBody] TodoItemForCreationViewModel todoItemForCreationViewModel)
+        [HttpPost()]
+        [Authorize(Roles = "FreeUser")]
+        public IActionResult CreateTodoItems([FromBody] TodoItemForCreationViewModel todoItemForCreationViewModel)
         {
             if (todoItemForCreationViewModel == null)
             {
@@ -100,8 +101,8 @@ namespace TodoApi.Controllers
         }
 
         [HttpDelete("{id}")]
-        [Authorize("MustOwnTodoItem")]
-        public IActionResult DeleteTodoItem(long id)
+        [Authorize("MustOwnTodoItem", Roles = "FreeUser")]
+        public IActionResult DeleteTodoItems(long id)
         {
             var ownerId = User.Claims.FirstOrDefault(claim => claim.Type == "sub")?.Value; // this is how we know who the current user is.
 
@@ -128,7 +129,7 @@ namespace TodoApi.Controllers
         }
 
         [HttpPut("{id}")]
-        [Authorize("MustOwnTodoItem")]
+        [Authorize("MustOwnTodoItem", Roles = "FreeUser")]
         public IActionResult UpdateTodoItem(long id, [FromBody] TodoItemForUpdateViewModel todoItemForUpdateViewModel)
         {
             var ownerId = User.Claims.FirstOrDefault(claim => claim.Type == "sub")?.Value; // this is how we know who the current user is.

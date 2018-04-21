@@ -11,9 +11,9 @@ namespace IdentityServer.Entities
         {
             #region Reset configuration data
             // for debug use only.
-            context.Delete(context.Clients);
-            context.Delete(context.IdentityResources);
-            context.Delete(context.ApiResources);
+            //context.Delete(context.Clients);
+            //context.Delete(context.IdentityResources);
+            //context.Delete(context.ApiResources);
 
             #endregion
 

@@ -1,9 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Net.Mime;
-using System.Threading.Tasks;
-using IdentityServer4.AccessTokenValidation;
+﻿using IdentityServer4.AccessTokenValidation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -46,12 +41,6 @@ namespace TodoApi
             services.AddAuthorization(options =>
             {
                 // Attribute-based Access Control(ABAC)
-                options.AddPolicy("CanAddTodoItemMoreThan5", policybuilder =>
-                {
-                    policybuilder.RequireAuthenticatedUser();
-                    policybuilder.RequireClaim("subscriptionlevel", "PayingUser");
-                    policybuilder.RequireClaim("country", "nl");
-                });
                 options.AddPolicy("MustOwnTodoItem", policybuilder =>
                 {
                     policybuilder.RequireAuthenticatedUser();
@@ -61,7 +50,7 @@ namespace TodoApi
                 });
             });
 
-            services.AddSingleton<IAuthorizationHandler, MustOwnTodoItemHandler>();
+            services.AddScoped<IAuthorizationHandler, MustOwnTodoItemHandler>();
 
             services.AddAuthentication(IdentityServerAuthenticationDefaults.AuthenticationScheme)
                 // Securing Access to Your API - Registers the IdentityServer authentication handler.
@@ -78,10 +67,6 @@ namespace TodoApi
 
                     options.ApiSecret = ApiSecret; //"apisecret"; // this should be the same as defined in 'Config.cs' at ApiSecrets. 
                 });
-
-            // register the DbContext on the container, getting the connection string from
-            // appSettings (note: use this during development; in a production environment,
-            // it's better to store the connection string in an environment variable)
 
             // Add-migration -name InitialMigration -context TodoContext 
             services.AddDbContext<TodoContext>(o => o.UseSqlServer(ConnectionString));
@@ -120,15 +105,13 @@ namespace TodoApi
                 // Map from TodoItem (entity) to TodoItemViewModel, and back
                 cfg.CreateMap<TodoItem, TodoItemViewModel>().ReverseMap();
 
-                // Map from TodoItemForCreationViewModel to TodoItem
-                // Ignore properties that shouldn't be mapped
+                // Map from TodoItemForCreationViewModel to TodoItem, Ignore properties that shouldn't be mapped
                 cfg.CreateMap<TodoItemForCreationViewModel, TodoItem>()
                     .ForMember(m => m.Id, options => options.Ignore())
                     .ForMember(m => m.IsComplete, options => options.Ignore())
                     .ForMember(m => m.OwnerId, options => options.Ignore());
 
-                // Map from TodoItemForUpdateViewModel to TodoItem
-                // ignore properties that shouldn't be mapped
+                // Map from TodoItemForUpdateViewModel to TodoItem, ignore properties that shouldn't be mapped
                 cfg.CreateMap<TodoItemForUpdateViewModel, TodoItem>()
                     .ForMember(m => m.Id, options => options.Ignore())
                     .ForMember(m => m.OwnerId, options => options.Ignore());

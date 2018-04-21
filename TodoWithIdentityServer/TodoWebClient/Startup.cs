@@ -37,16 +37,6 @@ namespace TodoWebClient
         public void ConfigureServices(IServiceCollection services)
         {
             services.AddMvc();
-            services.AddAuthorization(options =>
-            {
-                // Attribute-based Access Control(ABAC)
-                options.AddPolicy("CanOrderFrame", policybuilder =>
-                {
-                    policybuilder.RequireAuthenticatedUser();
-                    policybuilder.RequireClaim("subscriptionlevel", "PayingUser");
-                    policybuilder.RequireClaim("country", "nl");
-                });
-            });
 
             // register an IHttpContextAccessor so we can access the current
             // HttpContext in services by injecting it

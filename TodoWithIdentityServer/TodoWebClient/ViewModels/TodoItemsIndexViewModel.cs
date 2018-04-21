@@ -5,11 +5,11 @@ namespace TodoWebClient.ViewModels
 {
     public class TodoItemsIndexViewModel
     {
-        public IEnumerable<TodoItemViewModel> Images { get; private set; }
+        public IEnumerable<TodoItemViewModel> TodoItemViewModels { get; private set; }
 
-        public TodoItemsIndexViewModel(List<TodoItemViewModel> images)
+        public TodoItemsIndexViewModel(List<TodoItemViewModel> todoItemViewModels)
         {
-           Images = images;
+            TodoItemViewModels = todoItemViewModels;
         }
     }
 }

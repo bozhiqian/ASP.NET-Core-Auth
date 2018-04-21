@@ -45,6 +45,7 @@ namespace IdentityServer.Controllers.UserRegistration
                                            new Entities.UserClaim("given_name", model.Firstname),
                                            new Entities.UserClaim("family_name", model.Lastname),
                                            new Entities.UserClaim("emailaddress", model.Email),
+                                           new Entities.UserClaim("role", "FreeUser"),
                                            new Entities.UserClaim("subscriptionlevel", "FreeUser"),
                                            new Entities.UserClaim("mobile", model.Mobile),
                                        }

@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using Newtonsoft.Json;
 using TodoViewModel;
@@ -26,10 +27,13 @@ namespace TodoWebClient.Controllers
     {
         private readonly ITodoApiHttpClient _iTodoApiHttpClient;
 
-        public TodoItemsController(ITodoApiHttpClient todoApiHttpClient)
+        public TodoItemsController(ITodoApiHttpClient todoApiHttpClient, IConfiguration configuration)
         {
             _iTodoApiHttpClient = todoApiHttpClient;
+            Configuration = configuration;
         }
+
+        public IConfiguration Configuration { get; }
 
         public async Task<IActionResult> Index()
         {
@@ -50,11 +54,41 @@ namespace TodoWebClient.Controllers
                     return View(todoItemsIndexViewModel);
 
                 }
-                else // if (response.StatusCode == HttpStatusCode.Unauthorized || response.StatusCode == HttpStatusCode.Forbidden)
+                else 
                 {
                     return RedirectToAction("AccessDenied", "Authorization");
                 }
             });
+        }
+
+        public IActionResult AddTodoItem()
+        {
+            return View();
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> AddTodoItem(AddTodoItemViewModel addTodoItemViewModel)
+        {
+            if (!ModelState.IsValid)
+            {
+                return View();
+            }
+
+            // create an ImageForCreation instance
+            var todoItemForCreationViewModel = new TodoItemForCreationViewModel() { Name = addTodoItemViewModel.Name };
+
+            // serialize it
+            var serializedTodoItemForCreationViewModel = JsonConvert.SerializeObject(todoItemForCreationViewModel);
+
+            // call the API
+            var httpClient = await _iTodoApiHttpClient.GetClient();
+
+            var response = await httpClient.PostAsync(
+                    $"api/todoitems",
+                    new StringContent(serializedTodoItemForCreationViewModel, Encoding.Unicode, "application/json"))
+                .ConfigureAwait(false);
+            return HandleApiResponse(response, () => RedirectToAction("Index"));
         }
 
         public async Task<IActionResult> EditTodoItem(long id)
@@ -62,7 +96,7 @@ namespace TodoWebClient.Controllers
             // call the API
             var httpClient = await _iTodoApiHttpClient.GetClient();
 
-            var response = await httpClient.GetAsync($"api/todoitmes/{id}").ConfigureAwait(false);
+            var response = await httpClient.GetAsync($"api/todoitems/{id}").ConfigureAwait(false);
             return await HandleApiResponseAsync(response, async () =>
             {
                 var todoitemsAsString = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
@@ -112,51 +146,22 @@ namespace TodoWebClient.Controllers
             var response = await httpClient.DeleteAsync($"api/todoitems/{id}").ConfigureAwait(false);
             return HandleApiResponse(response, () => RedirectToAction("Index"));
         }
-
-
-        [Authorize(Roles = "PayingUser")]
-        public IActionResult AddTodoItem()
-        {
-            return View();
-        }
-
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        [Authorize(Roles = "PayingUser")]
-        public async Task<IActionResult> AddTodoItem(AddTodoItemViewModel addTodoItemViewModel)
-        {
-            if (!ModelState.IsValid)
-            {
-                return View();
-            }
-
-            // create an ImageForCreation instance
-            var todoItemForCreationViewModel = new TodoItemForCreationViewModel() { Name = addTodoItemViewModel.Name };
-
-            // serialize it
-            var serializedTodoItemForCreationViewModel = JsonConvert.SerializeObject(todoItemForCreationViewModel);
-
-            // call the API
-            var httpClient = await _iTodoApiHttpClient.GetClient();
-
-            var response = await httpClient.PostAsync(
-                                               $"api/todoitems",
-                                               new StringContent(serializedTodoItemForCreationViewModel, Encoding.Unicode, "application/json"))
-                                           .ConfigureAwait(false);
-            return HandleApiResponse(response, () => RedirectToAction("Index"));
-        }
+        
 
         public async Task Logout()
         {
             // get the metadata
-            var discoveryClient = new DiscoveryClient("https://localhost:44327/"); // Url of IdentityServer.
+            var authority = Configuration["Authority:IdentityServer4:Url"]; // "https://localhost:44327/"
+            var discoveryClient = new DiscoveryClient(authority); // Url of IdentityServer.
             var metaDataResponse = await discoveryClient.GetAsync();
 
 
             #region // Token Revocation - Clients can programmatically revoke tokens in IdentityServer via the token revocation endpoint
 
             // get revocation client - Client for an OAuth 2.0 token revocation endpoint
-            var revocationClient = new TokenRevocationClient(metaDataResponse.RevocationEndpoint, "TodoWebClient", "ItsMySecret");
+            var clientId = Configuration["Authority:IdentityServer4:ClientId"]; // "TodoWebClient"
+            var clientSecret = Configuration["Authority:IdentityServer4:ClientSecret"]; // "ItsMySecret"
+            var revocationClient = new TokenRevocationClient(metaDataResponse.RevocationEndpoint, clientId, clientSecret);
 
             await revocationClient.RevokeAccessTokenAsync(HttpContext); 
             await revocationClient.RevokeRefreshTokenAsync(HttpContext); 
@@ -218,6 +223,12 @@ namespace TodoWebClient.Controllers
             {
                 Debug.WriteLine($"Claim type: {claim.Type}, claim value: {claim.Value}");
             }
+
+            var code = await HttpContext.GetTokenAsync(OpenIdConnectParameterNames.Code);
+            Debug.WriteLine($"Authorization Code: {code}");
+
+            var ownerId = User.Claims.FirstOrDefault(claim => claim.Type == "sub")?.Value; // this is how we know who the current user is.
+            Debug.WriteLine($"OwnerId: {ownerId}");
         }
 
     }

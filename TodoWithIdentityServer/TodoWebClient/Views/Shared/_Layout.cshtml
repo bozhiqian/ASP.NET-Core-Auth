@@ -29,14 +29,14 @@
                     <span class="icon-bar"></span>
                     <span class="icon-bar"></span>
                 </button>
-                <a asp-area="" asp-controller="Home" asp-action="Index" class="navbar-brand">TodoWebClient</a>
+                <a asp-area="" asp-controller="TodoItems" asp-action="Index" class="navbar-brand">TodoWebClient</a>
             </div>
             <div class="navbar-collapse collapse">
                 <ul class="nav navbar-nav">
                     <li><a asp-area="" asp-controller="TodoItems" asp-action="Index">Home</a></li>
 
                     @*Role-based Access Control (RBAC)*@
-                    @if (User.IsInRole("PayingUser"))
+                    @if (User.IsInRole("FreeUser"))
                     {
                         <li><a asp-area="" asp-controller="TodoItems" asp-action="AddTodoItem">Add todo item</a></li>
                     }

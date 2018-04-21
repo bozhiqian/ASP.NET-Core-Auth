@@ -4,7 +4,7 @@
 </div>
 
 <div class="container">
-    @foreach (var item in Model.Images)
+    @foreach (var item in Model.TodoItemViewModels)
     {
         <div class="pull-left col-md-4">
             <div class="h5">@item.Name</div>
@@ -16,3 +16,6 @@
         </div>
     }
 </div> 
+<div class="bottomMarginDefault">
+    <a asp-action="AddTodoItem" asp-controller="TodoItems">Add</a>
+</div>

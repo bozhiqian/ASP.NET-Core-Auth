@@ -45,11 +45,11 @@ namespace IdentityServer
                     IsActive = true,
                     Claims =
                     {
-                        new UserClaim("role", "PayingUser"),
+                        new UserClaim("role", "RevokedUser"),
                         new UserClaim("given_name", "Claire"),
                         new UserClaim("family_name", "Underwood"),
                         new UserClaim("address", "Big Street 2"),
-                        new UserClaim("subscriptionlevel", "PayingUser"),
+                        new UserClaim("subscriptionlevel", "RevokedUser"),
                         new UserClaim("country", "be")
                     }
                 }
@@ -57,16 +57,14 @@ namespace IdentityServer
             return users;
         }
 
-        #region Resources & Scopes
-
-        /// <summary>
-        /// Resources & Scopes
-        /// Scopes represent what you are allowed to do. They represent the scoped access. 
-        /// In IdentityServer 4 scopes are modelled as resources, which come in two flavors: Identity and API. 
-        /// An identity resource allows you to model a scope that will return a certain set of claims, 
-        /// whilst an API resource scope allows you to model access to a protected resource (typically an API).
-        /// </summary>
-
+        #region Resources (ApiResources and IdentityResources) & Scopes
+        /*
+         Resources & Scopes
+         Scopes represent what you are allowed to do. They represent the scoped access. 
+         In IdentityServer 4 scopes are modelled as resources, which come in two flavors: Identity and API. 
+         An identity resource allows you to model a scope that will return a certain set of claims, 
+         whilst an API resource scope allows you to model access to a protected resource (typically an API).
+        */
 
         internal static IEnumerable<ApiResource> GetApiResources() // this is to be used to securing web api.
         {
