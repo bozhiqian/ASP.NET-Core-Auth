@@ -1,6 +1,6 @@
 # Deep dive in using IdentityServer4 to perform authentication for ASP.NET Core Api and Web app.
 
-This Demo code was havily referenced from the "[IdentityServer4Demo](https://github.com/fhrn71/IdentityServer4Demo)" at start up code, and then to be changed quite a lot implementation code plus adding few new features. 
+This Demo code was heavily referenced from the "[IdentityServer4Demo](https://github.com/fhrn71/IdentityServer4Demo)" at start up code, and then to be changed quite a lot implementation code plus adding few new features. 
 
 There have a lot comments in code to explain in details. The solution contains 3 projects which are IdentityServer, TodoApi(web api) and TodoWebClient(mvc client). All users authentication requests from "TodoApi" and "TodoWebClient" are handled by IdentityServer, while authorization are managed by "TodoApi".
 
