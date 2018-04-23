@@ -188,6 +188,8 @@ namespace IdentityServerWithAspNetIdentity
 
             return client;
         }
+
+        public static string ExternalScheme => IdentityServerConstants.ExternalCookieAuthenticationScheme; //IdentityConstants.ExternalScheme;
     }
 }
 
