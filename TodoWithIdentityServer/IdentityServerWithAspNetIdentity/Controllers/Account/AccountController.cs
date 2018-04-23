@@ -38,6 +38,7 @@ namespace IdentityServerWithAspNetIdentity.Controllers.Account
         private readonly IAuthenticationSchemeProvider _schemeProvider;
         private readonly IEventService _events;
         private readonly IEmailSender _emailSender;
+        private readonly ISmsSender _smsSender; // to be used at 2FA.
         private readonly ILogger _logger;
 
         public AccountController(
@@ -48,6 +49,7 @@ namespace IdentityServerWithAspNetIdentity.Controllers.Account
             IAuthenticationSchemeProvider schemeProvider,
             IEventService events,
             IEmailSender emailSender,
+            ISmsSender smsSender,
             ILogger<AccountController> logger)
         {
             _userManager = userManager;
@@ -58,6 +60,7 @@ namespace IdentityServerWithAspNetIdentity.Controllers.Account
             _events = events;
 
             _emailSender = emailSender;
+            _smsSender = smsSender;
             _logger = logger;
         }
 
@@ -113,6 +116,39 @@ namespace IdentityServerWithAspNetIdentity.Controllers.Account
                 if (result.Succeeded)
                 {
                     var user = await _userManager.FindByNameAsync(model.Username);
+                    if (!string.IsNullOrEmpty(user.PhoneNumber))
+                    {
+                        // Perform two factor authentication.
+                        // This is demo only that we assume to do 2FA when user has mobile number. 
+                        var id = new ClaimsIdentity();
+                        id.AddClaim(new Claim(JwtClaimTypes.Subject, user.Id));
+
+                        await HttpContext.SignInAsync("idsrv.2FA", new ClaimsPrincipal(id)); // this creates a cookie with this new scheme "idsrv.2FA";
+
+                        // Send a verification code to the user. One option might be sending a code to the user's email address.
+                        // Another option is sending code to a text message on user's mobile.
+                        // For demo purposes, we're going to fake this and accept 123 as the correct code.
+
+                        var message = $"Hello {model.Username} !! Welcome to IdentityServer deep dive demo.";
+                        await _smsSender.SendSmsAsync(user.PhoneNumber, message);
+
+                        var redirectToAdditionalFactorUrl = Url.Action("AdditionalAuthenticationFactor",
+                            new
+                            {
+                                returnUrl = model.ReturnUrl, // pass in the current returnUrl so we can continue where we left off after validating the second factor.
+                                rememberLogin = model.RememberLogin // whethere or not we'll need to create a persistent cookie when signing into IdentityServer.
+                            });
+
+                        if (_interaction.IsValidReturnUrl(model.ReturnUrl) || Url.IsLocalUrl(model.ReturnUrl))
+                        {
+                            return Redirect(redirectToAdditionalFactorUrl);
+                        }
+
+                        return Redirect("~/");
+                    }
+
+                    #region Perform normal sigle factor authentication (these are original code)
+                    
                     await _events.RaiseAsync(new UserLoginSuccessEvent(user.UserName, user.Id, user.UserName));
 
                     // make sure the returnUrl is still valid, and if so redirect back to authorize endpoint or a local page
@@ -123,6 +159,7 @@ namespace IdentityServerWithAspNetIdentity.Controllers.Account
                     }
 
                     return Redirect("~/");
+                    #endregion
                 }
 
                 await _events.RaiseAsync(new UserLoginFailureEvent(model.Username, "invalid credentials"));
@@ -134,6 +171,77 @@ namespace IdentityServerWithAspNetIdentity.Controllers.Account
             var vm = await BuildLoginViewModelAsync(model);
             return View(vm);
         }
+
+        #region 2-factor authentication
+
+        [HttpGet]
+        public IActionResult AdditionalAuthenticationFactor(string returnUrl, bool rememberLogin)
+        {
+            // create VM
+            var vm = new AdditionalAuthenticationFactorViewModel()
+            {
+                RememberLogin = rememberLogin,
+                ReturnUrl = returnUrl
+            };
+
+            return View(vm);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> AdditionalAuthenticationFactor(AdditionalAuthenticationFactorViewModel model)
+        {
+            if (ModelState.IsValid)
+            {
+                // read identity from the temporary cookie
+                var info = await HttpContext.AuthenticateAsync("idsrv.2FA");
+                var tempUser = info?.Principal;
+                if (tempUser == null)
+                {
+                    throw new Exception("2FA error");
+                }
+
+                var user = await _userManager.FindByIdAsync(tempUser.GetSubjectId());
+
+                // ... check code for user
+                if (model.Code != AuthMessageSMSSenderOptions.SendNumber)
+                {
+                    ModelState.AddModelError("code", "2FA code is invalid.");
+                    return View(model);
+                }
+
+                // login the user
+                AuthenticationProperties props = null;
+                if (AccountOptions.AllowRememberLogin && model.RememberLogin)
+                {
+                    props = new AuthenticationProperties
+                    {
+                        IsPersistent = true,
+                        ExpiresUtc = DateTimeOffset.UtcNow.Add(AccountOptions.RememberMeLoginDuration)
+                    };
+                };
+
+                // issue authentication cookie for user
+                await _events.RaiseAsync(new UserLoginSuccessEvent(user.UserName, user.Id, user.UserName));
+                await HttpContext.SignInAsync(user.Id, user.UserName, props);
+
+                // delete temporary cookie used for 2FA
+                await HttpContext.SignOutAsync("idsrv.2FA");
+
+                if (_interaction.IsValidReturnUrl(model.ReturnUrl) || Url.IsLocalUrl(model.ReturnUrl))
+                {
+                    return Redirect(model.ReturnUrl);
+                }
+
+                return Redirect("~/");
+
+            }
+
+            // something went wrong, show an error            
+            return View(model);
+        }
+
+        #endregion
 
         /// <summary>
         /// initiate roundtrip to external authentication provider

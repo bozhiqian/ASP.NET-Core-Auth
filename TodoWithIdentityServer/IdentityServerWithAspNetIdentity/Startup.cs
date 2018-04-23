@@ -57,9 +57,6 @@ namespace IdentityServerWithAspNetIdentity
                 .AddEntityFrameworkStores<ApplicationDbContext>()
                 .AddDefaultTokenProviders();
 
-            // Add application services.
-            services.AddTransient<IEmailSender, EmailSender>();
-
             services.AddMvc();
 
             // configure identity server with in-memory stores, keys, clients and scopes
@@ -195,6 +192,14 @@ namespace IdentityServerWithAspNetIdentity
 
             #endregion
 
+            // Register application services.
+            services.AddTransient<IEmailSender, AuthMessageSender>();
+            services.AddTransient<ISmsSender, AuthMessageSender>();
+            services.Configure<AuthMessageSMSSenderOptions>(options =>
+            {
+                options.SID = Configuration["Authentication:Twilio:SID"];
+                options.AuthToken = Configuration["Authentication:Twilio:AuthToken"];
+            });
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
