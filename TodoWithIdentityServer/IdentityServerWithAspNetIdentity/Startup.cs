@@ -1,15 +1,5 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Globalization;
-using System.Linq;
-using System.Net.Http;
 using System.Reflection;
-using System.Security.Claims;
-using System.Security.Cryptography;
-using System.Security.Cryptography.X509Certificates;
-using System.Text;
-using System.Text.Encodings.Web;
-using System.Threading.Tasks;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -17,11 +7,11 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using IdentityServerWithAspNetIdentity.Data;
+using IdentityServerWithAspNetIdentity.Extensions;
 using IdentityServerWithAspNetIdentity.Models;
 using IdentityServerWithAspNetIdentity.Services;
 using Microsoft.AspNetCore.Authentication.Facebook;
 using Microsoft.AspNetCore.Authentication.Twitter;
-using Newtonsoft.Json.Linq;
 
 namespace IdentityServerWithAspNetIdentity
 {
@@ -68,10 +58,11 @@ namespace IdentityServerWithAspNetIdentity
                     options.Events.RaiseSuccessEvents = true;
                 })
                 //.AddDeveloperSigningCredential()
-                //.AddInMemoryPersistedGrants()
-                //.AddInMemoryIdentityResources(Config.GetIdentityResources())
-                //.AddInMemoryApiResources(Config.GetApiResources())
-                //.AddInMemoryClients(Config.GetClients())
+                .AddSigningCredential(Certificate.Certificate.Get(Configuration["Authentication:Certificate:ThumbPrint"])) // Using local self-signed certificate.
+                                                                                                                           //.AddInMemoryPersistedGrants()
+                                                                                                                           //.AddInMemoryIdentityResources(Config.GetIdentityResources())
+                                                                                                                           //.AddInMemoryApiResources(Config.GetApiResources())
+                                                                                                                           //.AddInMemoryClients(Config.GetClients())
 
                 /*
                  It’s important when using ASP.NET Identity that IdentityServer be registered after ASP.NET Identity in the DI system 
@@ -97,7 +88,13 @@ namespace IdentityServerWithAspNetIdentity
                      {
                          options.ConfigureDbContext = context =>
                              context.UseSqlServer(IdentityServerConnectionString,
-                                 sqlOptions => { sqlOptions.MigrationsAssembly(migrationsAssembly); });
+                                 sqlOptions =>
+                                 {
+                                     sqlOptions.MigrationsAssembly(migrationsAssembly);
+
+                                     //Configuring Connection Resiliency: https://docs.microsoft.com/en-us/ef/core/miscellaneous/connection-resiliency 
+                                     sqlOptions.EnableRetryOnFailure(maxRetryCount: 15, maxRetryDelay: TimeSpan.FromSeconds(30), errorNumbersToAdd: null);
+                                 });
                      })
                     /*
                      Persisted grant store -- // this adds the operational data from DB (codes, tokens, consents)
@@ -111,7 +108,13 @@ namespace IdentityServerWithAspNetIdentity
                     {
                         options.ConfigureDbContext = context =>
                             context.UseSqlServer(IdentityServerConnectionString,
-                                sqlOptions => { sqlOptions.MigrationsAssembly(migrationsAssembly); });
+                                sqlOptions =>
+                                {
+                                    sqlOptions.MigrationsAssembly(migrationsAssembly);
+
+                                    //Configuring Connection Resiliency: https://docs.microsoft.com/en-us/ef/core/miscellaneous/connection-resiliency 
+                                    sqlOptions.EnableRetryOnFailure(maxRetryCount: 15, maxRetryDelay: TimeSpan.FromSeconds(30), errorNumbersToAdd: null);
+                                });
 
                         // this enables automatic token cleanup. this is optional.
                         options.EnableTokenCleanup = true;
@@ -166,7 +169,7 @@ namespace IdentityServerWithAspNetIdentity
                         // Refer to 'Get the user's e-mail address from Twitter' at https://github.com/aspnet/Security/issues/765
                         twitterOptions.Events = new TwitterEvents()
                         {
-                            OnCreatingTicket = OnCreatingTicket
+                            OnCreatingTicket = async context => await context.CreatingTicket()
                         };
                     })
                     // https://docs.microsoft.com/en-us/aspnet/core/security/authentication/social/facebook-logins?tabs=aspnetcore2x
@@ -228,112 +231,5 @@ namespace IdentityServerWithAspNetIdentity
                     template: "{controller=Home}/{action=Index}/{id?}");
             });
         }
-
-        #region Helper methods
-
-        public async Task OnCreatingTicket(TwitterCreatingTicketContext context)
-        {
-            var nonce = Guid.NewGuid().ToString("N");
-
-            var authorizationParts = new SortedDictionary<string, string>
-                            {
-                                {"oauth_consumer_key", context.Options.ConsumerKey},
-                                {"oauth_nonce", nonce},
-                                {"oauth_signature_method", "HMAC-SHA1"},
-                                {"oauth_timestamp", GenerateTimeStamp()},
-                                {"oauth_token", context.AccessToken},
-                                {"oauth_version", "1.0"}
-                            };
-
-            var parameterBuilder = new StringBuilder();
-            foreach (var authorizationKey in authorizationParts)
-            {
-                parameterBuilder.AppendFormat("{0}={1}&",
-                    UrlEncoder.Default.Encode(authorizationKey.Key),
-                    UrlEncoder.Default.Encode(authorizationKey.Value));
-            }
-
-            parameterBuilder.Length--;
-            var parameterString = parameterBuilder.ToString();
-
-            var resource_url = "https://api.twitter.com/1.1/account/verify_credentials.json";
-            var resource_query = "include_email=true";
-            var canonicalizedRequestBuilder = new StringBuilder();
-            canonicalizedRequestBuilder.Append(HttpMethod.Get.Method);
-            canonicalizedRequestBuilder.Append("&");
-            canonicalizedRequestBuilder.Append(UrlEncoder.Default.Encode(resource_url));
-            canonicalizedRequestBuilder.Append("&");
-            canonicalizedRequestBuilder.Append(UrlEncoder.Default.Encode(resource_query));
-            canonicalizedRequestBuilder.Append("%26");
-            canonicalizedRequestBuilder.Append(UrlEncoder.Default.Encode(parameterString));
-
-            var signature = ComputeSignature(context.Options.ConsumerSecret, context.AccessTokenSecret, canonicalizedRequestBuilder.ToString());
-            authorizationParts.Add("oauth_signature", signature);
-
-            var authorizationHeaderBuilder = new StringBuilder();
-            authorizationHeaderBuilder.Append("OAuth ");
-            foreach (var authorizationPart in authorizationParts)
-            {
-                authorizationHeaderBuilder.AppendFormat(
-                    "{0}=\"{1}\", ", authorizationPart.Key,
-                    UrlEncoder.Default.Encode(authorizationPart.Value));
-            }
-
-            authorizationHeaderBuilder.Length = authorizationHeaderBuilder.Length - 2;
-
-            var request = new HttpRequestMessage(HttpMethod.Get, resource_url + "?include_email=true");
-            request.Headers.Add("Authorization", authorizationHeaderBuilder.ToString());
-
-            var httpClient = new System.Net.Http.HttpClient();
-            var response = await httpClient.SendAsync(request, context.HttpContext.RequestAborted);
-            response.EnsureSuccessStatusCode();
-            string responseText = await response.Content.ReadAsStringAsync();
-
-            var result = JObject.Parse(responseText);
-
-            var email = result.Value<string>("email");
-            var identity = (ClaimsIdentity)context.Principal.Identity;
-            if (!string.IsNullOrEmpty(email))
-            {
-                identity.AddClaim(new Claim(ClaimTypes.Email, email, ClaimValueTypes.String, "Twitter"));
-            }
-        }
-
-        public X509Certificate2 LoadCertificateFromStore(string thumbPrint)
-        {
-            using (var store = new X509Store(StoreName.My, StoreLocation.LocalMachine))
-            {
-                store.Open(OpenFlags.ReadOnly);
-                var certCollection = store.Certificates.Find(X509FindType.FindByThumbprint, thumbPrint, true);
-                if (certCollection.Count == 0)
-                {
-                    throw new Exception("The specified certificate wasn't found. Check the specified thumbprint.");
-                }
-
-                return certCollection[0];
-            }
-        }
-
-        private string GenerateTimeStamp()
-        {
-            var secondsSinceUnixEpocStart = DateTime.UtcNow - new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-            return Convert.ToInt64(secondsSinceUnixEpocStart.TotalSeconds).ToString(CultureInfo.InvariantCulture);
-        }
-
-        private string ComputeSignature(string consumerSecret, string tokenSecret, string signatureData)
-        {
-            using (var algorithm = new HMACSHA1())
-            {
-                algorithm.Key = Encoding.ASCII.GetBytes(
-                    string.Format(CultureInfo.InvariantCulture,
-                        "{0}&{1}",
-                        UrlEncoder.Default.Encode(consumerSecret),
-                        string.IsNullOrEmpty(tokenSecret) ? string.Empty : UrlEncoder.Default.Encode(tokenSecret)));
-                var hash = algorithm.ComputeHash(Encoding.ASCII.GetBytes(signatureData));
-                return Convert.ToBase64String(hash);
-            }
-        }
-        #endregion
-
     }
 }

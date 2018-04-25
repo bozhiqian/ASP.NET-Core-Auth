@@ -1,7 +1,14 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using IdentityServer4;
 using IdentityServer4.Models;
+using IdentityServerWithAspNetIdentity.Models;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Configuration;
+using ApiResource = IdentityServer4.Models.ApiResource;
+using Client = IdentityServer4.Models.Client;
+using IdentityResource = IdentityServer4.Models.IdentityResource;
+using Secret = IdentityServer4.Models.Secret;
 
 namespace IdentityServerWithAspNetIdentity
 {
@@ -9,6 +16,43 @@ namespace IdentityServerWithAspNetIdentity
     {
         public static IConfiguration Configuration { get; set; }
 
+        public static List<ApplicationUser> GetUsers()
+        {
+            var user =
+                new ApplicationUser()
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    FirstName = "Stanley",
+                    LastName = "Qian",
+                    UserName = "demouser@microsoft.com",
+                    Email = "demouser@microsoft.com",
+
+                    Address = "1130 Whitehorse Road",
+                    City = "Melbourne",
+                    State = "VIC",
+                    Country = "Australia",
+                    PostCode = "3128",
+
+                    CardHolderName = "DemoUser",
+                    CardNumber = "4012888888881881",
+                    CardType = 1,
+                    Expiration = "12/20",
+                    
+                    NormalizedEmail = "DEMOUSER@MICROSOFT.COM",
+                    NormalizedUserName = "DEMOUSER@MICROSOFT.COM",
+                    SecurityStamp = Guid.NewGuid().ToString("D"),
+
+                    
+                };
+
+            user.PasswordHash = new PasswordHasher<ApplicationUser>().HashPassword(user, "Pass@word1");
+
+            return new List<ApplicationUser>()
+            {
+                user
+            };
+
+        }
 
         #region Resources (ApiResources and IdentityResources) & Scopes
         /*

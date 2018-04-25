@@ -99,7 +99,7 @@ namespace IdentityServerWithAspNetIdentity.Controllers.Account
                     // denied the consent (even if this client does not require consent).
                     // this will send back an access denied OIDC error response to the client.
                     await _interaction.GrantConsentAsync(context, ConsentResponse.Denied);
-                    
+
                     // we can trust model.ReturnUrl since GetAuthorizationContextAsync returned non-null
                     return Redirect(model.ReturnUrl);
                 }
@@ -115,6 +115,7 @@ namespace IdentityServerWithAspNetIdentity.Controllers.Account
                 var result = await _signInManager.PasswordSignInAsync(model.Username, model.Password, model.RememberLogin, lockoutOnFailure: true);
                 if (result.Succeeded)
                 {
+                    var redirectToAdditionalFactorUrl = model.ReturnUrl;
                     var user = await _userManager.FindByNameAsync(model.Username);
                     if (!string.IsNullOrEmpty(user.PhoneNumber))
                     {
@@ -132,34 +133,27 @@ namespace IdentityServerWithAspNetIdentity.Controllers.Account
                         var message = $"Hello {model.Username} !! Welcome to IdentityServer deep dive demo.";
                         await _smsSender.SendSmsAsync(user.PhoneNumber, message);
 
-                        var redirectToAdditionalFactorUrl = Url.Action("AdditionalAuthenticationFactor",
+                        redirectToAdditionalFactorUrl = Url.Action("AdditionalAuthenticationFactor",
                             new
                             {
                                 returnUrl = model.ReturnUrl, // pass in the current returnUrl so we can continue where we left off after validating the second factor.
                                 rememberLogin = model.RememberLogin // whethere or not we'll need to create a persistent cookie when signing into IdentityServer.
                             });
-
-                        if (_interaction.IsValidReturnUrl(model.ReturnUrl) || Url.IsLocalUrl(model.ReturnUrl))
-                        {
-                            return Redirect(redirectToAdditionalFactorUrl);
-                        }
-
-                        return Redirect("~/");
                     }
-
-                    #region Perform normal sigle factor authentication (these are original code)
-                    
-                    await _events.RaiseAsync(new UserLoginSuccessEvent(user.UserName, user.Id, user.UserName));
+                    else
+                    {
+                        // Perform normal sigle factor authentication (these are original code)
+                        await _events.RaiseAsync(new UserLoginSuccessEvent(user.UserName, user.Id, user.UserName));
+                    }
 
                     // make sure the returnUrl is still valid, and if so redirect back to authorize endpoint or a local page
                     // the IsLocalUrl check is only necessary if you want to support additional local pages, otherwise IsValidReturnUrl is more strict
                     if (_interaction.IsValidReturnUrl(model.ReturnUrl) || Url.IsLocalUrl(model.ReturnUrl))
                     {
-                        return Redirect(model.ReturnUrl);
+                        return Redirect(redirectToAdditionalFactorUrl);
                     }
 
                     return Redirect("~/");
-                    #endregion
                 }
 
                 await _events.RaiseAsync(new UserLoginFailureEvent(model.Username, "invalid credentials"));
@@ -286,14 +280,26 @@ namespace IdentityServerWithAspNetIdentity.Controllers.Account
 
             // lookup our user and external provider info
             var (user, provider, providerUserId, claims) = await FindUserFromExternalProviderAsync(result);
+            var (email, first, last, filtered) = GetUserClaims(claims);
+
             if (user == null)
             {
                 // this might be where you might initiate a custom workflow for user registration
                 // in this sample we don't show how that would be done, as our sample implementation
                 // simply auto-provisions new external user
-                user = await AutoProvisionUserAsync(provider, providerUserId, claims);
+                user = await AutoProvisionUserAsync(email, first, last); // Create a new user.
             }
 
+            // Add missing claims for external user.
+            var addedClaimsCount = await _userManager.AddUserClaimsAsync(user, filtered);
+
+            // Add missing external user logins.
+            var addedLoginCount = await _userManager.AddUserLoginsAsync(user, provider, providerUserId);
+            
+            // Sign in the user with this external login provider if the user already has a login.
+            var r = await _signInManager.ExternalLoginSignInAsync(provider, providerUserId, isPersistent: false, bypassTwoFactor: true);
+            
+            #region Add additional claims
             // this allows us to collect any additonal claims or properties
             // for the specific prtotocols used and store them in the local auth cookie.
             // this is typically used to store data needed for signout from those protocols.
@@ -308,8 +314,14 @@ namespace IdentityServerWithAspNetIdentity.Controllers.Account
             // it doesn't expose an API to issue additional claims from the login workflow
             var principal = await _signInManager.CreateUserPrincipalAsync(user);
             additionalLocalClaims.AddRange(principal.Claims);
+
+            var addedAddtionalClaimsCount = await _userManager.AddUserClaimsAsync(user, additionalLocalClaims);
+
+            #endregion
+
             var name = principal.FindFirst(JwtClaimTypes.Name)?.Value ?? user.Id;
             await _events.RaiseAsync(new UserLoginSuccessEvent(provider, providerUserId, user.Id, name));
+            
             await HttpContext.SignInAsync(user.Id, name, provider, localSignInProps, additionalLocalClaims.ToArray());
 
             // delete temporary cookie used during external authentication
@@ -396,7 +408,7 @@ namespace IdentityServerWithAspNetIdentity.Controllers.Account
             ViewData["ReturnUrl"] = returnUrl;
             if (ModelState.IsValid)
             {
-                var user = new ApplicationUser { UserName = model.Email, Email = model.Email, PhoneNumber = model.Mobile};
+                var user = new ApplicationUser { UserName = model.Email, Email = model.Email, PhoneNumber = model.Mobile };
                 var result = await _userManager.CreateAsync(user, model.Password);
                 if (result.Succeeded)
                 {
@@ -699,7 +711,7 @@ namespace IdentityServerWithAspNetIdentity.Controllers.Account
             }
         }
 
-        private async Task<(ApplicationUser user, string provider, string providerUserId, IEnumerable<Claim> claims)> 
+        private async Task<(ApplicationUser user, string provider, string providerUserId, IEnumerable<Claim> claims)>
             FindUserFromExternalProviderAsync(AuthenticateResult result)
         {
             var externalUser = result.Principal;
@@ -724,63 +736,73 @@ namespace IdentityServerWithAspNetIdentity.Controllers.Account
             return (user, provider, providerUserId, claims);
         }
 
-        private async Task<ApplicationUser> AutoProvisionUserAsync(string provider, string providerUserId, IEnumerable<Claim> claims)
+        private async Task<ApplicationUser> AutoProvisionUserAsync(string email, string first, string last)
         {
+            // check if there is existing user with the same email.
+            var user = await _userManager.FindByEmailAsync(email);
+
+            if (user == null)
+            {
+                user = new ApplicationUser
+                {
+                    UserName = email,
+                    Email = email,
+                    FirstName = first,
+                    LastName = last,
+                };
+
+                var ir = await _userManager.CreateAsync(user);
+                if (!ir.Succeeded) throw new Exception(ir.Errors.First().Description);
+
+            }
+
+            //IdentityResult identityResult;
+            //if (filtered.Any())
+            //{
+            //    identityResult = await _userManager.AddClaimsAsync(user, filtered);
+            //    if (!identityResult.Succeeded) throw new Exception(identityResult.Errors.First().Description);
+            //}
+
+            //identityResult = await _userManager.AddLoginAsync(user, new UserLoginInfo(provider, providerUserId, provider));
+            //if (!identityResult.Succeeded) throw new Exception(identityResult.Errors.First().Description);
+
+            return user;
+        }
+
+        private (string email, string firstname, string lastname, List<Claim> filtered) GetUserClaims(IEnumerable<Claim> claims)
+        {
+            claims = claims.ToList();
+
             // create a list of claims that we want to transfer into our store
             var filtered = new List<Claim>();
 
-            // user's display name
-            var name = claims.FirstOrDefault(x => x.Type == JwtClaimTypes.Name)?.Value ??
-                claims.FirstOrDefault(x => x.Type == ClaimTypes.Name)?.Value;
-            if (name != null)
+            // user's name
+            var first = claims.FirstOrDefault(x => x.Type == JwtClaimTypes.GivenName)?.Value ??
+                        claims.FirstOrDefault(x => x.Type == ClaimTypes.GivenName)?.Value;
+            var last = claims.FirstOrDefault(x => x.Type == JwtClaimTypes.FamilyName)?.Value ??
+                       claims.FirstOrDefault(x => x.Type == ClaimTypes.Surname)?.Value;
+            if (first != null && last != null)
             {
-                filtered.Add(new Claim(JwtClaimTypes.Name, name));
+                filtered.Add(new Claim(JwtClaimTypes.Name, first + " " + last));
             }
-            else
+            else if (first != null)
             {
-                var first = claims.FirstOrDefault(x => x.Type == JwtClaimTypes.GivenName)?.Value ??
-                    claims.FirstOrDefault(x => x.Type == ClaimTypes.GivenName)?.Value;
-                var last = claims.FirstOrDefault(x => x.Type == JwtClaimTypes.FamilyName)?.Value ??
-                    claims.FirstOrDefault(x => x.Type == ClaimTypes.Surname)?.Value;
-                if (first != null && last != null)
-                {
-                    filtered.Add(new Claim(JwtClaimTypes.Name, first + " " + last));
-                }
-                else if (first != null)
-                {
-                    filtered.Add(new Claim(JwtClaimTypes.Name, first));
-                }
-                else if (last != null)
-                {
-                    filtered.Add(new Claim(JwtClaimTypes.Name, last));
-                }
+                filtered.Add(new Claim(JwtClaimTypes.Name, first));
+            }
+            else if (last != null)
+            {
+                filtered.Add(new Claim(JwtClaimTypes.Name, last));
             }
 
             // email
             var email = claims.FirstOrDefault(x => x.Type == JwtClaimTypes.Email)?.Value ??
-               claims.FirstOrDefault(x => x.Type == ClaimTypes.Email)?.Value;
+                        claims.FirstOrDefault(x => x.Type == ClaimTypes.Email)?.Value;
             if (email != null)
             {
                 filtered.Add(new Claim(JwtClaimTypes.Email, email));
             }
 
-            var user = new ApplicationUser
-            {
-                UserName = Guid.NewGuid().ToString(),
-            };
-            var identityResult = await _userManager.CreateAsync(user);
-            if (!identityResult.Succeeded) throw new Exception(identityResult.Errors.First().Description);
-
-            if (filtered.Any())
-            {
-                identityResult = await _userManager.AddClaimsAsync(user, filtered);
-                if (!identityResult.Succeeded) throw new Exception(identityResult.Errors.First().Description);
-            }
-
-            identityResult = await _userManager.AddLoginAsync(user, new UserLoginInfo(provider, providerUserId, provider));
-            if (!identityResult.Succeeded) throw new Exception(identityResult.Errors.First().Description);
-
-            return user;
+            return (email, first, last, filtered);
         }
 
         private void ProcessLoginCallbackForOidc(AuthenticateResult externalResult, List<Claim> localClaims, AuthenticationProperties localSignInProps)

@@ -9,9 +9,13 @@ namespace IdentityServerWithAspNetIdentity.Controllers.Account
     public class LoginInputModel
     {
         [Required]
+        [EmailAddress]
         public string Username { get; set; }
+
         [Required]
         public string Password { get; set; }
+
+        [Display(Name = "Remember me?")]
         public bool RememberLogin { get; set; }
         public string ReturnUrl { get; set; }
     }

@@ -1,12 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
+﻿using IdentityServer4.EntityFramework.DbContexts;
+using IdentityServerWithAspNetIdentity.Data;
+using IdentityServerWithAspNetIdentity.Extensions;
 using Microsoft.AspNetCore;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Logging;
+
 
 namespace IdentityServerWithAspNetIdentity
 {
@@ -14,7 +11,12 @@ namespace IdentityServerWithAspNetIdentity
     {
         public static void Main(string[] args)
         {
-            BuildWebHost(args).Run();
+            BuildWebHost(args)
+                // Seed the database
+                .MigrateDbContext<ApplicationDbContext>(context => context.SeedAsync().Wait())
+                .MigrateDbContext<ConfigurationDbContext>(context => context.SeedAsync().Wait())
+                .MigrateDbContext<PersistedGrantDbContext>()
+                .Run();
         }
 
         public static IWebHost BuildWebHost(string[] args) =>
